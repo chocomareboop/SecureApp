@@ -294,22 +294,18 @@ def import_post():
         except native.InkError as exc:
             flash(f"Import rejected: {exc}", "error")
             return render_template("import.html")
-        author = db.session.get(User, meta["author_id"])
-        if author is None:
-            flash("Import rejected: unknown author.", "error")
-            return render_template("import.html")
-        # VULN-1 impact: ownership and publish state are trusted from the struct
-        # filled by the native parser, which an overflowing title can overwrite.
+        # FIX-1 (defense in depth): ownership and visibility are decided by the
+        # server, never by values coming back from native code.
         post = Post(
             title=meta["title"][:200] or "Untitled import",
             tags=meta["tags"][:200],
             body=body,
-            is_published=bool(meta["is_published"]),
-            author_id=meta["author_id"],
+            is_published=False,
+            author_id=g.user.id,
         )
         db.session.add(post)
         db.session.commit()
-        flash("Imported as a draft." if not post.is_published else "Imported.", "success")
+        flash("Imported as a draft.", "success")
         return redirect(url_for("main.view_post", post_id=post.id))
     return render_template("import.html")
 
