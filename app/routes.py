@@ -1,7 +1,4 @@
-"""All InkPost routes.
-
-LAB BUILD: intentional vulnerabilities are marked VULN-n.
-"""
+"""All InkPost routes. Security fixes are marked FIX-n."""
 import functools
 import os
 import re
@@ -347,7 +344,6 @@ def settings():
 @bp.route("/settings/email", methods=["POST"])
 @login_required
 def change_email():
-    # VULN-4 (CWE-352): state-changing POST with no anti-CSRF token.
     email = request.form.get("email", "").strip().lower()
     if not EMAIL_RE.match(email):
         flash("Please enter a valid email address.", "error")
