@@ -26,6 +26,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from . import native
+from .authz import get_post_or_404
 from .models import Comment, Post, User, db
 
 bp = Blueprint("main", __name__)
@@ -95,9 +96,7 @@ def feed():
 
 @bp.route("/post/<int:post_id>")
 def view_post(post_id):
-    post = db.get_or_404(Post, post_id)
-    if not post.is_published and (g.user is None or g.user.id != post.author_id):
-        abort(404)
+    post = get_post_or_404(post_id, "view")
     return render_template("post.html", post=post)
 
 
@@ -228,9 +227,8 @@ def write():
 @bp.route("/post/<int:post_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_post(post_id):
-    # VULN-3 (CWE-639): IDOR — the post is looked up by ID only. Any logged-in
-    # user can open (and read) or modify anyone's post, including drafts.
-    post = db.get_or_404(Post, post_id)
+    # FIX-3 (CWE-639): object-level authorization on every access.
+    post = get_post_or_404(post_id, "edit")
     if request.method == "POST":
         try:
             _apply_form(post)
@@ -246,7 +244,7 @@ def edit_post(post_id):
 @bp.route("/post/<int:post_id>/delete", methods=["POST"])
 @login_required
 def delete_post(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: no ownership check
+    post = get_post_or_404(post_id, "delete")
     db.session.delete(post)
     db.session.commit()
     flash("Story deleted.", "success")
@@ -256,7 +254,7 @@ def delete_post(post_id):
 @bp.route("/post/<int:post_id>/publish", methods=["POST"])
 @login_required
 def toggle_publish(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: no ownership check
+    post = get_post_or_404(post_id, "publish")
     post.is_published = not post.is_published
     db.session.commit()
     flash("Story published." if post.is_published else "Story moved back to drafts.", "success")
@@ -266,7 +264,7 @@ def toggle_publish(post_id):
 @bp.route("/post/<int:post_id>/cover-info", methods=["POST"])
 @login_required
 def cover_info(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: no ownership check
+    post = get_post_or_404(post_id, "inspect")
     if not post.cover_filename:
         flash("This story has no cover image yet.", "info")
         return redirect(url_for("main.edit_post", post_id=post.id))
@@ -293,9 +291,7 @@ def cover_info(post_id):
 @bp.route("/post/<int:post_id>/comment", methods=["POST"])
 @login_required
 def add_comment(post_id):
-    post = db.get_or_404(Post, post_id)
-    if not post.is_published:
-        abort(404)
+    post = get_post_or_404(post_id, "comment")
     body = request.form.get("body", "").strip()
     if not body or len(body) > 2000:
         flash("Comments must be 1–2000 characters.", "error")
@@ -422,7 +418,7 @@ def admin_toggle_user(user_id):
 @bp.route("/api/posts/<int:post_id>")
 @login_required
 def api_post(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: returns other users' drafts
+    post = get_post_or_404(post_id, "view")
     return jsonify(post.to_dict())
 
 
