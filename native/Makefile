@@ -6,10 +6,12 @@
 CC    ?= gcc
 BUILD := build
 
-# LAB BUILD — intentionally unhardened: no stack canary, no FORTIFY_SOURCE.
-CFLAGS  ?= -O0 -g -fPIC -fno-stack-protector -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Wall
-LDFLAGS ?=
-CLI_FLAGS ?=
+# FIX-1: hardened build — stack canaries, FORTIFY_SOURCE, stack-clash protection,
+# warnings as errors, full RELRO, non-executable stack, PIE for the CLI.
+CFLAGS  ?= -O2 -g -fPIC -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
+           -fstack-clash-protection -Wall -Wextra -Werror -Wformat -Wformat-security
+LDFLAGS ?= -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+CLI_FLAGS ?= -fPIE -pie
 
 ASAN_FLAGS := -O1 -g -U_FORTIFY_SOURCE -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Wall
 

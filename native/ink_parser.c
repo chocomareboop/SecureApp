@@ -2,15 +2,34 @@
  * ink_parser.c — native parser for InkPost ".ink" import files.
  * See ink_parser.h for the file format.
  *
- * LAB BUILD: contains an intentional memory-safety bug (VULN-1).
+ * Every length field read from the file is untrusted: it is checked against
+ * both the destination buffer and the bytes remaining before any copy.
  */
 #include "ink_parser.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static uint16_t read_u16(const uint8_t *p)
 {
     return (uint16_t)(p[0] | (p[1] << 8));
+}
+
+/*
+ * Copy a length-prefixed field into dst (capacity dst_size, including the
+ * terminator). Rejects the field if it would not fit or if it claims more
+ * bytes than remain in the input.
+ */
+static int copy_field(char *dst, size_t dst_size, const uint8_t *src, size_t field_len, size_t remaining)
+{
+    int written;
+
+    if (field_len >= dst_size || field_len > remaining)
+        return -1;
+    written = snprintf(dst, dst_size, "%.*s", (int)field_len, (const char *)src);
+    if (written < 0 || (size_t)written >= dst_size)
+        return -1;
+    return 0;
 }
 
 int ink_parse(const uint8_t *buf, size_t len, int32_t uploader_id, ink_meta_t *out)
@@ -31,28 +50,22 @@ int ink_parse(const uint8_t *buf, size_t len, int32_t uploader_id, ink_meta_t *o
     meta.author_id = uploader_id;
     meta.is_published = 0;
 
+    if (pos + 2 > len)
+        return INK_ERR_FORMAT;
     title_len = read_u16(buf + pos);
     pos += 2;
 
-    /*
-     * VULN-1 (CWE-120 / CWE-787): title_len is taken straight from the file and
-     * is never checked against sizeof(meta.title) or against the bytes left in
-     * buf. A title longer than 64 bytes overwrites is_published and author_id
-     * (data corruption); a much longer one runs past the struct and smashes the
-     * saved return address on the stack (control-flow hijack / crash).
-     */
-    memcpy(meta.title, buf + pos, title_len);
-    meta.title[title_len] = '\0';
+    /* FIX-1 (CWE-120): never trust the length field from the file. */
+    if (copy_field(meta.title, sizeof meta.title, buf + pos, title_len, len - pos) != 0)
+        return INK_ERR_TITLE;
     pos += title_len;
 
     if (pos + 2 > len)
         return INK_ERR_FORMAT;
     tags_len = read_u16(buf + pos);
     pos += 2;
-    if (tags_len >= sizeof meta.tags || tags_len > len - pos)
+    if (copy_field(meta.tags, sizeof meta.tags, buf + pos, tags_len, len - pos) != 0)
         return INK_ERR_TAGS;
-    memcpy(meta.tags, buf + pos, tags_len);
-    meta.tags[tags_len] = '\0';
     pos += tags_len;
 
     *out = meta;
