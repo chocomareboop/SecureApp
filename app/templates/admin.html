@@ -23,6 +23,7 @@
           <td>
             {% if u.id != g.user.id %}
             <form method="post" action="{{ url_for('main.admin_toggle_user', user_id=u.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm {{ 'btn-danger' if u.is_active }}" type="submit">{{ 'Disable' if u.is_active else 'Enable' }}</button>
             </form>
             {% endif %}

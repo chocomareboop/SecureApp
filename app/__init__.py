@@ -6,9 +6,12 @@ for the CYC386 DevSecOps sprint. Run it only on 127.0.0.1.
 import os
 
 from flask import Flask
+from flask_wtf.csrf import CSRFProtect
 
 from .models import db
 from .seed import register_cli, seed_if_empty
+
+csrf = CSRFProtect()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -23,6 +26,12 @@ def create_app(test_config=None):
         SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "inkpost.db"),
         UPLOAD_DIR=os.path.join(app.instance_path, "uploads"),
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,  # FIX-2: cap upload size at 5 MB
+        # FIX-4 (CWE-352): hardened session cookie. Secure is enabled whenever the
+        # app is served over HTTPS (set INKPOST_SECURE_COOKIES=1 in production).
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=os.environ.get("INKPOST_SECURE_COOKIES", "0") == "1",
+        WTF_CSRF_TIME_LIMIT=3600,
         NATIVE_LIB=os.environ.get(
             "INKPOST_NATIVE_LIB", os.path.join(BASE_DIR, "native", "build", "libinkparser.so")
         ),
@@ -32,6 +41,7 @@ def create_app(test_config=None):
 
     os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
     db.init_app(app)
+    csrf.init_app(app)  # FIX-4: synchronizer token required on every POST
 
     from .filters import register_filters
     from .routes import bp

@@ -12,6 +12,7 @@
     <h2>Upload an .ink file</h2>
     <p class="muted small">Exported from the InkPost desktop editor. Files are parsed by our fast native parser and always arrive as a draft in your account.</p>
     <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label for="ink_file">.ink file</label>
         <input id="ink_file" type="file" name="ink_file" accept=".ink" required>

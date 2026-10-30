@@ -12,6 +12,7 @@
   <div class="editor-grid">
     <form id="post-form" method="post" enctype="multipart/form-data"
           action="{{ url_for('main.write') if is_new else url_for('main.edit_post', post_id=post.id) }}" class="panel">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input class="title-input" type="text" name="title" maxlength="200" placeholder="Title" value="{{ post.title or '' }}" required aria-label="Title">
       <div class="tabs" role="tablist">
         <button class="tab active" type="button" data-tab="write">Write</button>
@@ -49,6 +50,7 @@
         <h2>Cover inspector</h2>
         <p class="hint">Checks the uploaded file's real type on the server.</p>
         <form method="post" action="{{ url_for('main.cover_info', post_id=post.id) }}" class="side-actions">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-block" type="submit">Inspect cover file</button>
         </form>
         {% if cover_info %}<pre class="terminal">{{ cover_info }}</pre>{% endif %}
