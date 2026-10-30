@@ -5,7 +5,9 @@ LAB BUILD: intentional vulnerabilities are marked VULN-n.
 import functools
 import os
 import re
-import subprocess
+# subprocess is only used with fixed argument lists and shell=False (see cover_info).
+import subprocess  # nosec B404
+import uuid
 
 from flask import (
     Blueprint,
@@ -21,13 +23,22 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.utils import secure_filename
 
 from . import native
 from .models import Comment, Post, User, db
 
 bp = Blueprint("main", __name__)
 
-ALLOWED_COVER_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+# Allowed cover types: extension -> magic-byte signatures.
+COVER_SIGNATURES = {
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".gif": (b"GIF87a", b"GIF89a"),
+    ".webp": (b"RIFF",),
+}
+FILE_CMD = "/usr/bin/file"
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}\.[A-Za-z]{2,}$")
 
@@ -163,15 +174,21 @@ def my_posts():
 
 
 def _save_cover(post, file):
-    name = file.filename or ""
-    if not name.lower().endswith(ALLOWED_COVER_EXT):
+    """FIX-2: validate the upload and store it under a server-generated name."""
+    original = secure_filename(file.filename or "")
+    ext = os.path.splitext(original)[1].lower()
+    if ext not in COVER_SIGNATURES:
         raise ValueError("Cover must be a .png, .jpg, .gif or .webp image.")
-    # VULN-2 (part 1) / CWE-22: the client-supplied filename is used as the
-    # on-disk name without sanitization.
-    path = os.path.join(current_app.config["UPLOAD_DIR"], name)
-    file.save(path)
-    post.cover_filename = name
-    post.cover_original_name = name
+    head = file.stream.read(16)
+    file.stream.seek(0)
+    if not any(head.startswith(sig) for sig in COVER_SIGNATURES[ext]) or (
+        ext == ".webp" and head[8:12] != b"WEBP"
+    ):
+        raise ValueError("That file is not a valid image.")
+    stored = f"{uuid.uuid4().hex}{ext}"
+    file.save(os.path.join(current_app.config["UPLOAD_DIR"], stored))
+    post.cover_filename = stored
+    post.cover_original_name = original[:255]
 
 
 def _apply_form(post):
@@ -253,11 +270,23 @@ def cover_info(post_id):
     if not post.cover_filename:
         flash("This story has no cover image yet.", "info")
         return redirect(url_for("main.edit_post", post_id=post.id))
-    path = os.path.join(current_app.config["UPLOAD_DIR"], post.cover_filename)
-    # VULN-2 (CWE-78): OS command injection — the user-controlled filename is
-    # interpolated into a string that is run by /bin/sh.
-    result = subprocess.run(f"file {path}", shell=True, capture_output=True, text=True, timeout=10)
-    info = (result.stdout + result.stderr).strip()
+    upload_dir = os.path.realpath(current_app.config["UPLOAD_DIR"])
+    path = os.path.realpath(os.path.join(upload_dir, post.cover_filename))
+    if os.path.dirname(path) != upload_dir or not os.path.isfile(path):
+        abort(404)
+    # FIX-2 (CWE-78): fixed argument vector, no shell, "--" ends option parsing,
+    # and the path is a server-generated UUID name.
+    # Reviewed: fixed binary and arguments, shell=False, server-generated path.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+    result = subprocess.run(  # nosec B603
+        [FILE_CMD, "--brief", "--mime-type", "--", path],
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    info = f"{post.cover_original_name or 'cover'}: {result.stdout.strip() or 'unknown type'}"
     return render_template("editor.html", post=post, is_new=False, cover_info=info)
 
 

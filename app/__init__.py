@@ -22,6 +22,7 @@ def create_app(test_config=None):
         SECRET_KEY="inkpost-dev-secret",
         SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "inkpost.db"),
         UPLOAD_DIR=os.path.join(app.instance_path, "uploads"),
+        MAX_CONTENT_LENGTH=5 * 1024 * 1024,  # FIX-2: cap upload size at 5 MB
         NATIVE_LIB=os.environ.get(
             "INKPOST_NATIVE_LIB", os.path.join(BASE_DIR, "native", "build", "libinkparser.so")
         ),
