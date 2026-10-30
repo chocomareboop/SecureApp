@@ -38,8 +38,8 @@
       <span class="avatar">{{ c.author.initial }}</span>
       <div>
         <div class="meta"><span class="author-name">{{ c.author.username }}</span><span class="dot">{{ c.created_at|nice_date }}</span></div>
-        {# VULN-6 (CWE-79): stored XSS — comment body rendered without escaping #}
-        <div class="comment-body">{{ c.body|safe }}</div>
+        {# FIX-6: comment text is autoescaped by Jinja #}
+        <div class="comment-body">{{ c.body }}</div>
       </div>
     </div>
     {% else %}
