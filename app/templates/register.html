@@ -6,6 +6,7 @@
     <div class="eyebrow">Join InkPost</div>
     <h1>Create your account</h1>
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label for="username">Username</label>
         <input id="username" type="text" name="username" pattern="[A-Za-z0-9_]{3,30}" autocomplete="username" required autofocus>

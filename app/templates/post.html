@@ -14,10 +14,12 @@
   <div class="owner-bar">
     <a class="btn btn-sm" href="{{ url_for('main.edit_post', post_id=post.id) }}">Edit</a>
     <form method="post" action="{{ url_for('main.toggle_publish', post_id=post.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-sm" type="submit">{{ 'Unpublish' if post.is_published else 'Publish' }}</button>
     </form>
     <span class="spacer"></span>
     <form method="post" action="{{ url_for('main.delete_post', post_id=post.id) }}" data-confirm="Delete this story permanently?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-sm btn-danger" type="submit">Delete</button>
     </form>
   </div>
@@ -36,8 +38,8 @@
       <span class="avatar">{{ c.author.initial }}</span>
       <div>
         <div class="meta"><span class="author-name">{{ c.author.username }}</span><span class="dot">{{ c.created_at|nice_date }}</span></div>
-        {# VULN-6 (CWE-79): stored XSS — comment body rendered without escaping #}
-        <div class="comment-body">{{ c.body|safe }}</div>
+        {# FIX-6: comment text is autoescaped by Jinja #}
+        <div class="comment-body">{{ c.body }}</div>
       </div>
     </div>
     {% else %}
@@ -46,6 +48,7 @@
 
     {% if g.user and post.is_published %}
     <form method="post" action="{{ url_for('main.add_comment', post_id=post.id) }}" class="field">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label for="comment">Add a comment</label>
       <textarea id="comment" name="body" rows="3" maxlength="2000" placeholder="Say something kind and useful…" required></textarea>
       <div class="form-actions"><button class="btn btn-primary" type="submit">Post comment</button></div>

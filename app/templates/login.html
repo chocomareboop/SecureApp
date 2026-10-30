@@ -6,6 +6,7 @@
     <div class="eyebrow">Welcome back</div>
     <h1>Log in</h1>
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label for="username">Username</label>
         <input id="username" type="text" name="username" autocomplete="username" required autofocus>

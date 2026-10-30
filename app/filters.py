@@ -1,12 +1,26 @@
 """Jinja filters."""
+import bleach
 import markdown
 from markupsafe import Markup
 
+# FIX-6 (CWE-79): only formatting tags survive; scripts, event handlers and
+# javascript: URLs are stripped after Markdown is rendered.
+ALLOWED_TAGS = {
+    "p", "br", "hr", "h1", "h2", "h3", "h4", "strong", "em", "b", "i", "del",
+    "a", "ul", "ol", "li", "blockquote", "code", "pre",
+    "table", "thead", "tbody", "tr", "th", "td", "img",
+}
+ALLOWED_ATTRIBUTES = {"a": ["href", "title", "rel"], "img": ["src", "alt", "title"]}
+ALLOWED_PROTOCOLS = {"http", "https", "mailto"}
+
 
 def render_markdown(text):
-    # VULN-6 (CWE-79): Markdown is converted to HTML and marked safe without
-    # sanitization, so raw HTML/JS in a post body is rendered as-is.
-    return Markup(markdown.markdown(text or "", extensions=["fenced_code", "tables"]))
+    html = markdown.markdown(text or "", extensions=["fenced_code", "tables"])
+    clean = bleach.clean(
+        html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRIBUTES, protocols=ALLOWED_PROTOCOLS, strip=True
+    )
+    # Safe: the HTML was sanitized by bleach on the line above.
+    return Markup(clean)  # nosec B704
 
 
 def nice_date(value):

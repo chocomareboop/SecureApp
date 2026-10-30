@@ -21,4 +21,5 @@ ENV INKPOST_NATIVE_LIB=/app/native/build/libinkparser.so \
     PYTHONUNBUFFERED=1
 EXPOSE 5000
 
-CMD ["python", "run.py"]
+# FIX-7: production WSGI server instead of the Flask development server.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--preload", "--access-logfile", "-", "wsgi:app"]

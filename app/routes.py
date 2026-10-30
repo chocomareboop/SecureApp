@@ -1,11 +1,10 @@
-"""All InkPost routes.
-
-LAB BUILD: intentional vulnerabilities are marked VULN-n.
-"""
+"""All InkPost routes. Security fixes are marked FIX-n."""
 import functools
 import os
 import re
-import subprocess
+# subprocess is only used with fixed argument lists and shell=False (see cover_info).
+import subprocess  # nosec B404
+import uuid
 
 from flask import (
     Blueprint,
@@ -21,13 +20,23 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.utils import secure_filename
 
 from . import native
+from .authz import get_post_or_404
 from .models import Comment, Post, User, db
 
 bp = Blueprint("main", __name__)
 
-ALLOWED_COVER_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+# Allowed cover types: extension -> magic-byte signatures.
+COVER_SIGNATURES = {
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".gif": (b"GIF87a", b"GIF89a"),
+    ".webp": (b"RIFF",),
+}
+FILE_CMD = "/usr/bin/file"
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}\.[A-Za-z]{2,}$")
 
@@ -84,9 +93,7 @@ def feed():
 
 @bp.route("/post/<int:post_id>")
 def view_post(post_id):
-    post = db.get_or_404(Post, post_id)
-    if not post.is_published and (g.user is None or g.user.id != post.author_id):
-        abort(404)
+    post = get_post_or_404(post_id, "view")
     return render_template("post.html", post=post)
 
 
@@ -163,15 +170,21 @@ def my_posts():
 
 
 def _save_cover(post, file):
-    name = file.filename or ""
-    if not name.lower().endswith(ALLOWED_COVER_EXT):
+    """FIX-2: validate the upload and store it under a server-generated name."""
+    original = secure_filename(file.filename or "")
+    ext = os.path.splitext(original)[1].lower()
+    if ext not in COVER_SIGNATURES:
         raise ValueError("Cover must be a .png, .jpg, .gif or .webp image.")
-    # VULN-2 (part 1) / CWE-22: the client-supplied filename is used as the
-    # on-disk name without sanitization.
-    path = os.path.join(current_app.config["UPLOAD_DIR"], name)
-    file.save(path)
-    post.cover_filename = name
-    post.cover_original_name = name
+    head = file.stream.read(16)
+    file.stream.seek(0)
+    if not any(head.startswith(sig) for sig in COVER_SIGNATURES[ext]) or (
+        ext == ".webp" and head[8:12] != b"WEBP"
+    ):
+        raise ValueError("That file is not a valid image.")
+    stored = f"{uuid.uuid4().hex}{ext}"
+    file.save(os.path.join(current_app.config["UPLOAD_DIR"], stored))
+    post.cover_filename = stored
+    post.cover_original_name = original[:255]
 
 
 def _apply_form(post):
@@ -211,9 +224,8 @@ def write():
 @bp.route("/post/<int:post_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_post(post_id):
-    # VULN-3 (CWE-639): IDOR — the post is looked up by ID only. Any logged-in
-    # user can open (and read) or modify anyone's post, including drafts.
-    post = db.get_or_404(Post, post_id)
+    # FIX-3 (CWE-639): object-level authorization on every access.
+    post = get_post_or_404(post_id, "edit")
     if request.method == "POST":
         try:
             _apply_form(post)
@@ -229,7 +241,7 @@ def edit_post(post_id):
 @bp.route("/post/<int:post_id>/delete", methods=["POST"])
 @login_required
 def delete_post(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: no ownership check
+    post = get_post_or_404(post_id, "delete")
     db.session.delete(post)
     db.session.commit()
     flash("Story deleted.", "success")
@@ -239,7 +251,7 @@ def delete_post(post_id):
 @bp.route("/post/<int:post_id>/publish", methods=["POST"])
 @login_required
 def toggle_publish(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: no ownership check
+    post = get_post_or_404(post_id, "publish")
     post.is_published = not post.is_published
     db.session.commit()
     flash("Story published." if post.is_published else "Story moved back to drafts.", "success")
@@ -249,24 +261,34 @@ def toggle_publish(post_id):
 @bp.route("/post/<int:post_id>/cover-info", methods=["POST"])
 @login_required
 def cover_info(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: no ownership check
+    post = get_post_or_404(post_id, "inspect")
     if not post.cover_filename:
         flash("This story has no cover image yet.", "info")
         return redirect(url_for("main.edit_post", post_id=post.id))
-    path = os.path.join(current_app.config["UPLOAD_DIR"], post.cover_filename)
-    # VULN-2 (CWE-78): OS command injection — the user-controlled filename is
-    # interpolated into a string that is run by /bin/sh.
-    result = subprocess.run(f"file {path}", shell=True, capture_output=True, text=True, timeout=10)
-    info = (result.stdout + result.stderr).strip()
+    upload_dir = os.path.realpath(current_app.config["UPLOAD_DIR"])
+    path = os.path.realpath(os.path.join(upload_dir, post.cover_filename))
+    if os.path.dirname(path) != upload_dir or not os.path.isfile(path):
+        abort(404)
+    # FIX-2 (CWE-78): fixed argument vector, no shell, "--" ends option parsing,
+    # and the path is a server-generated UUID name.
+    # Reviewed: fixed binary and arguments, shell=False, server-generated path.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+    result = subprocess.run(  # nosec B603
+        [FILE_CMD, "--brief", "--mime-type", "--", path],
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    info = f"{post.cover_original_name or 'cover'}: {result.stdout.strip() or 'unknown type'}"
     return render_template("editor.html", post=post, is_new=False, cover_info=info)
 
 
 @bp.route("/post/<int:post_id>/comment", methods=["POST"])
 @login_required
 def add_comment(post_id):
-    post = db.get_or_404(Post, post_id)
-    if not post.is_published:
-        abort(404)
+    post = get_post_or_404(post_id, "comment")
     body = request.form.get("body", "").strip()
     if not body or len(body) > 2000:
         flash("Comments must be 1–2000 characters.", "error")
@@ -322,7 +344,6 @@ def settings():
 @bp.route("/settings/email", methods=["POST"])
 @login_required
 def change_email():
-    # VULN-4 (CWE-352): state-changing POST with no anti-CSRF token.
     email = request.form.get("email", "").strip().lower()
     if not EMAIL_RE.match(email):
         flash("Please enter a valid email address.", "error")
@@ -393,7 +414,7 @@ def admin_toggle_user(user_id):
 @bp.route("/api/posts/<int:post_id>")
 @login_required
 def api_post(post_id):
-    post = db.get_or_404(Post, post_id)  # VULN-3: returns other users' drafts
+    post = get_post_or_404(post_id, "view")
     return jsonify(post.to_dict())
 
 
