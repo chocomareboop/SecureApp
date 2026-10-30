@@ -13,6 +13,31 @@ from .seed import register_cli, seed_if_empty
 
 csrf = CSRFProtect()
 
+# FIX-5 (CWE-1021) + defense in depth for XSS: strict CSP. Pages never load
+# inline scripts, so script-src can stay 'self'.
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
+
+SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -49,6 +74,12 @@ def create_app(test_config=None):
     register_filters(app)
     app.register_blueprint(bp)
     register_cli(app)
+
+    @app.after_request
+    def set_security_headers(response):
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
 
     with app.app_context():
         db.create_all()
