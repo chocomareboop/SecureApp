@@ -145,7 +145,7 @@ jobs:
         run: docker compose down -v
 
   # ------------------------------------------------------------------------ #
-  # 4. Container image scan
+  # 4. Container image scan (Trivy run from its official container image)
   # ------------------------------------------------------------------------ #
   container-scan:
     name: Container scan (Trivy)
@@ -158,22 +158,17 @@ jobs:
         run: docker build -t inkpost:ci .
 
       - name: Trivy report (HIGH + CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: inkpost:ci
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-          output: trivy.txt
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" \
+            aquasec/trivy:0.58.1 image --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 0 --format table --output /out/trivy.txt inkpost:ci
+          cat trivy.txt
 
       - name: Trivy gate (fail on fixable CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: inkpost:ci
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.58.1 image --severity CRITICAL --ignore-unfixed \
+            --exit-code 1 inkpost:ci
 
       - name: Upload Trivy report
         if: always()
