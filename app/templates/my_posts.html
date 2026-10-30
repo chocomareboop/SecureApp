@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}My posts{% endblock %}
+{% block content %}
+<section class="container page reading">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Your desk</div>
+      <h1>My posts</h1>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('main.write') }}">New story</a>
+  </div>
+  {% if posts %}
+  <div class="panel list">
+    {% for post in posts %}
+    <div class="list-row">
+      <div class="spacer">
+        <h3><a href="{{ url_for('main.view_post', post_id=post.id) }}">{{ post.title }}</a></h3>
+        <div class="meta">
+          {% if post.is_published %}<span class="status-pill live">Published</span>{% else %}<span class="status-pill">Draft</span>{% endif %}
+          <span>Updated {{ post.updated_at|nice_date }}</span>
+        </div>
+      </div>
+      <a class="btn btn-sm" href="{{ url_for('main.edit_post', post_id=post.id) }}">Edit</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><p>You haven't written anything yet.</p><a class="btn btn-primary" href="{{ url_for('main.write') }}">Start writing</a></div>
+  {% endif %}
+</section>
+{% endblock %}

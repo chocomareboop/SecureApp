@@ -1,0 +1,16 @@
+services:
+  inkpost:
+    build: .
+    image: inkpost:local
+    # Published on the loopback interface only — never expose the lab build to a network.
+    ports:
+      - "127.0.0.1:5000:5000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - inkpost-data:/app/instance
+    restart: unless-stopped
+
+volumes:
+  inkpost-data:

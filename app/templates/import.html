@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Import{% endblock %}
+{% block content %}
+<section class="container page reading">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Import</div>
+      <h1>Bring in a story</h1>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Upload an .ink file</h2>
+    <p class="muted small">Exported from the InkPost desktop editor. Files are parsed by our fast native parser and always arrive as a draft in your account.</p>
+    <form method="post" enctype="multipart/form-data">
+      <div class="field">
+        <label for="ink_file">.ink file</label>
+        <input id="ink_file" type="file" name="ink_file" accept=".ink" required>
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Import story</button></div>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>File format</h2>
+    <pre class="code-sample">"INK1" | u16 title_len | title | u16 tags_len | tags | body (Markdown)</pre>
+    <p class="hint">Lengths are little-endian. Titles up to 63 bytes, tags up to 127 bytes.</p>
+  </div>
+</section>
+{% endblock %}

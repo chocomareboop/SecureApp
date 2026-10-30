@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+instance/
+native/build/
+reports/
+poc/out/
+.pytest_cache/
+.env
+.DS_Store

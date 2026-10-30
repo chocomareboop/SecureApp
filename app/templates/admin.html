@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+<section class="container page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Administration</div>
+      <h1>Members</h1>
+    </div>
+    <span class="muted small">{{ users|length }} accounts</span>
+  </div>
+  <div class="panel table-wrap">
+    <table class="data">
+      <thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Posts</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><div class="meta"><span class="avatar">{{ u.initial }}</span><span class="author-name">{{ u.username }}</span></div></td>
+          <td class="muted">{{ u.email }}</td>
+          <td>{% if u.is_admin %}<span class="badge badge-admin">admin</span>{% else %}<span class="badge">member</span>{% endif %}</td>
+          <td>{{ u.posts|length }}</td>
+          <td>{% if u.is_active %}<span class="badge">active</span>{% else %}<span class="badge badge-off">disabled</span>{% endif %}</td>
+          <td>
+            {% if u.id != g.user.id %}
+            <form method="post" action="{{ url_for('main.admin_toggle_user', user_id=u.id) }}">
+              <button class="btn btn-sm {{ 'btn-danger' if u.is_active }}" type="submit">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

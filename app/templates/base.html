@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Stories{% endblock %} · InkPost</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,650;1,9..144,500&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  {% set ep = request.endpoint %}
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="{{ url_for('main.feed') }}" aria-label="InkPost home">
+        <span class="brand-mark">i</span><span class="brand-word">InkPost</span>
+      </a>
+      <nav class="nav-links" aria-label="Main">
+        <a class="nav-link {{ 'active' if ep == 'main.feed' }}" href="{{ url_for('main.feed') }}">Stories</a>
+        {% if g.user %}
+          <a class="nav-link {{ 'active' if ep == 'main.write' }}" href="{{ url_for('main.write') }}">Write</a>
+          <a class="nav-link {{ 'active' if ep == 'main.import_post' }}" href="{{ url_for('main.import_post') }}">Import</a>
+          <a class="nav-link {{ 'active' if ep == 'main.my_posts' }}" href="{{ url_for('main.my_posts') }}">My posts</a>
+          {% if g.user.is_admin %}
+            <a class="nav-link {{ 'active' if ep == 'main.admin' }}" href="{{ url_for('main.admin') }}">Admin</a>
+          {% endif %}
+          <a class="nav-link {{ 'active' if ep == 'main.settings' }}" href="{{ url_for('main.settings') }}">Settings</a>
+          <form method="post" action="{{ url_for('main.logout') }}">
+            <button class="btn btn-ghost btn-sm" type="submit">Log out</button>
+          </form>
+        {% else %}
+          <a class="nav-link {{ 'active' if ep == 'main.login' }}" href="{{ url_for('main.login') }}">Log in</a>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('main.register') }}">Join</a>
+        {% endif %}
+      </nav>
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>{% block content %}{% endblock %}</main>
+
+  <footer class="container footer">
+    <span>InkPost — stories from campus societies</span>
+    <span>CYC386 lab build · run on localhost only</span>
+  </footer>
+
+  <div class="toasts" aria-live="polite">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="toast toast-{{ category }}" role="status">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+</body>
+</html>

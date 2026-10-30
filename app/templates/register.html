@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Join{% endblock %}
+{% block content %}
+<section class="container narrow auth">
+  <div class="panel">
+    <div class="eyebrow">Join InkPost</div>
+    <h1>Create your account</h1>
+    <form method="post">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" type="text" name="username" pattern="[A-Za-z0-9_]{3,30}" autocomplete="username" required autofocus>
+        <span class="hint">3–30 letters, numbers or underscores</span>
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" name="email" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" name="password" minlength="8" autocomplete="new-password" required>
+      </div>
+      <div class="form-actions"><button class="btn btn-primary btn-block" type="submit">Create account</button></div>
+    </form>
+    <p class="muted small">Already a member? <a class="author-name" href="{{ url_for('main.login') }}">Log in</a></p>
+  </div>
+</section>
+{% endblock %}

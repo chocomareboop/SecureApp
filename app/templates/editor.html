@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New story' if is_new else 'Edit story' }}{% endblock %}
+{% block content %}
+<section class="container page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">{{ 'New story' if is_new else 'Editing' }}</div>
+    </div>
+    {% if not is_new %}<a class="btn btn-ghost btn-sm" href="{{ url_for('main.view_post', post_id=post.id) }}">View story →</a>{% endif %}
+  </div>
+
+  <div class="editor-grid">
+    <form id="post-form" method="post" enctype="multipart/form-data"
+          action="{{ url_for('main.write') if is_new else url_for('main.edit_post', post_id=post.id) }}" class="panel">
+      <input class="title-input" type="text" name="title" maxlength="200" placeholder="Title" value="{{ post.title or '' }}" required aria-label="Title">
+      <div class="tabs" role="tablist">
+        <button class="tab active" type="button" data-tab="write">Write</button>
+        <button class="tab" type="button" data-tab="preview">Preview</button>
+      </div>
+      <textarea id="body" name="body" placeholder="Tell your story… Markdown supported." aria-label="Body">{{ post.body or '' }}</textarea>
+      <div id="preview" class="prose preview hidden"></div>
+    </form>
+
+    <aside class="stack">
+      <div class="panel">
+        <h2>Details</h2>
+        <div class="field">
+          <label for="tags">Tags</label>
+          <input id="tags" form="post-form" type="text" name="tags" maxlength="200" placeholder="robotics, events" value="{{ post.tags or '' }}">
+          <span class="hint">Comma separated</span>
+        </div>
+        <div class="field">
+          <label for="cover">Cover image</label>
+          <input id="cover" form="post-form" type="file" name="cover" accept=".png,.jpg,.jpeg,.gif,.webp">
+          {% if post.cover_filename %}
+            <div class="cover-thumb"><img src="{{ url_for('main.uploaded_file', filename=post.cover_filename) }}" alt="Current cover"></div>
+          {% endif %}
+        </div>
+        <div class="field">
+          <label class="check"><input form="post-form" type="checkbox" name="publish" {{ 'checked' if post.is_published }}> Publish to the feed</label>
+        </div>
+        <div class="side-actions">
+          <button class="btn btn-primary btn-block" form="post-form" type="submit">{{ 'Save story' if is_new else 'Save changes' }}</button>
+        </div>
+      </div>
+
+      {% if not is_new and post.cover_filename %}
+      <div class="panel">
+        <h2>Cover inspector</h2>
+        <p class="hint">Checks the uploaded file's real type on the server.</p>
+        <form method="post" action="{{ url_for('main.cover_info', post_id=post.id) }}" class="side-actions">
+          <button class="btn btn-block" type="submit">Inspect cover file</button>
+        </form>
+        {% if cover_info %}<pre class="terminal">{{ cover_info }}</pre>{% endif %}
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+</section>
+{% endblock %}

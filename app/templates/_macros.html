@@ -1,0 +1,18 @@
+{% macro cover(post, cls='card-cover') -%}
+  <div class="{{ cls }}">
+    {% if post.cover_filename %}
+      <img src="{{ url_for('main.uploaded_file', filename=post.cover_filename) }}" alt="" loading="lazy">
+    {% else %}
+      <div class="cover-fallback tone-{{ post.tone }}">{{ post.title[:1] }}</div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro byline(post) -%}
+  <div class="meta">
+    <span class="avatar">{{ post.author.initial }}</span>
+    <span class="author-name">{{ post.author.username }}</span>
+    <span class="dot">{{ post.created_at|nice_date }}</span>
+    <span class="dot">{{ post.reading_minutes }} min read</span>
+  </div>
+{%- endmacro %}

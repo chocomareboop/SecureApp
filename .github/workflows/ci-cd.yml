@@ -1,0 +1,183 @@
+name: CI/CD Security Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------------ #
+  # 1. Build the native parser + run unit and security regression tests
+  # ------------------------------------------------------------------------ #
+  build-test:
+    name: Build & test (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Build native parser
+        run: make -C native clean all
+
+      - name: Compiler hardening report
+        run: make -C native hardening-report | tee native-hardening.txt
+
+      - name: Unit + security regression tests
+        run: |
+          mkdir -p reports
+          pytest -v --junitxml=reports/pytest-${{ matrix.python }}.xml
+
+      - name: AddressSanitizer run on a malicious sample
+        if: ${{ !cancelled() }}
+        run: |
+          make -C native asan
+          python poc/make_ink.py --out poc/out
+          set +e
+          ./native/build/ink_parser_cli_asan poc/out/bof_crash.ink 3 > asan.txt 2>&1
+          echo "exit code: $?" >> asan.txt
+          cat asan.txt
+          if grep -q "ERROR: AddressSanitizer" asan.txt; then
+            echo "::error::AddressSanitizer detected a memory-safety bug in the native parser"
+            exit 1
+          fi
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.python }}
+          path: |
+            reports/
+            asan.txt
+            native-hardening.txt
+
+  # ------------------------------------------------------------------------ #
+  # 2. SAST — fails the build on HIGH / ERROR findings
+  # ------------------------------------------------------------------------ #
+  sast:
+    name: SAST (Bandit + Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install scanners
+        run: pip install bandit==1.9.4 semgrep
+
+      - name: Bandit full report (all severities)
+        run: |
+          mkdir -p reports
+          bandit -r app run.py wsgi.py -f json -o reports/bandit.json || true
+
+      - name: Bandit gate (fail on HIGH severity)
+        run: bandit -r app run.py wsgi.py --severity-level high --confidence-level medium
+
+      - name: Semgrep full report (SARIF)
+        run: semgrep scan --config p/python --config p/flask --config p/c --sarif --output reports/semgrep.sarif || true
+
+      - name: Semgrep gate (fail on ERROR severity)
+        run: semgrep scan --config p/python --config p/flask --config p/c --severity ERROR --error
+
+      - name: Upload SAST reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-reports
+          path: reports/
+
+  # ------------------------------------------------------------------------ #
+  # 3. DAST — OWASP ZAP baseline against the running container
+  # ------------------------------------------------------------------------ #
+  dast:
+    name: DAST (OWASP ZAP baseline)
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start InkPost in Docker
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:5000/ > /dev/null && exit 0
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: "http://127.0.0.1:5000"
+          rules_file_name: ".zap/rules.tsv"
+          cmd_options: "-a -I"
+          allow_issue_writing: false
+          artifact_name: zap-report
+
+      - name: Stop container
+        if: always()
+        run: docker compose down -v
+
+  # ------------------------------------------------------------------------ #
+  # 4. Container image scan
+  # ------------------------------------------------------------------------ #
+  container-scan:
+    name: Container scan (Trivy)
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t inkpost:ci .
+
+      - name: Trivy report (HIGH + CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: inkpost:ci
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          output: trivy.txt
+
+      - name: Trivy gate (fail on fixable CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: inkpost:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy.txt

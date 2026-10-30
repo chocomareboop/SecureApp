@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_macros.html" import cover, byline %}
+{% block title %}{{ tag or "Stories" }}{% endblock %}
+{% block content %}
+<section class="container hero">
+  <div class="eyebrow">Campus societies · Fall 2026</div>
+  <h1>Stories worth writing down.</h1>
+  <p>Build logs, event recaps and ideas from the people who run your university's societies.</p>
+  {% if all_tags %}
+  <div class="chips" aria-label="Filter by tag">
+    <a class="chip {{ 'active' if not tag }}" href="{{ url_for('main.feed') }}">All</a>
+    {% for t in all_tags %}
+      <a class="chip {{ 'active' if tag == t }}" href="{{ url_for('main.feed', tag=t) }}">{{ t }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="container">
+  {% if posts %}
+  <div class="grid">
+    {% for post in posts %}
+    <a class="card" href="{{ url_for('main.view_post', post_id=post.id) }}">
+      {{ cover(post) }}
+      <div class="card-body">
+        {% if post.tag_list %}
+        <div class="tags">{% for t in post.tag_list[:3] %}<span class="tag">{{ t }}</span>{% endfor %}</div>
+        {% endif %}
+        <h2>{{ post.title }}</h2>
+        <p>{{ post.excerpt }}</p>
+        {{ byline(post) }}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>No stories here yet.</p>
+    {% if g.user %}<a class="btn btn-primary" href="{{ url_for('main.write') }}">Write the first one</a>{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

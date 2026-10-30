@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import byline %}
+{% block title %}{{ post.title }}{% endblock %}
+{% block content %}
+<article class="container reading article">
+  <div class="meta">
+    {% if post.is_published %}<span class="status-pill live">Published</span>{% else %}<span class="status-pill">Draft</span>{% endif %}
+    {% for t in post.tag_list %}<a class="tag" href="{{ url_for('main.feed', tag=t) }}">{{ t }}</a>{% endfor %}
+  </div>
+  <h1>{{ post.title }}</h1>
+  {{ byline(post) }}
+
+  {% if g.user and g.user.id == post.author_id %}
+  <div class="owner-bar">
+    <a class="btn btn-sm" href="{{ url_for('main.edit_post', post_id=post.id) }}">Edit</a>
+    <form method="post" action="{{ url_for('main.toggle_publish', post_id=post.id) }}">
+      <button class="btn btn-sm" type="submit">{{ 'Unpublish' if post.is_published else 'Publish' }}</button>
+    </form>
+    <span class="spacer"></span>
+    <form method="post" action="{{ url_for('main.delete_post', post_id=post.id) }}" data-confirm="Delete this story permanently?">
+      <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if post.cover_filename %}
+  <div class="article-cover"><img src="{{ url_for('main.uploaded_file', filename=post.cover_filename) }}" alt=""></div>
+  {% endif %}
+
+  <div class="prose stack">{{ post.body|markdown }}</div>
+
+  <section class="comments" id="comments">
+    <h2>Comments <span class="muted">({{ post.comments|length }})</span></h2>
+    {% for c in post.comments %}
+    <div class="comment">
+      <span class="avatar">{{ c.author.initial }}</span>
+      <div>
+        <div class="meta"><span class="author-name">{{ c.author.username }}</span><span class="dot">{{ c.created_at|nice_date }}</span></div>
+        {# VULN-6 (CWE-79): stored XSS — comment body rendered without escaping #}
+        <div class="comment-body">{{ c.body|safe }}</div>
+      </div>
+    </div>
+    {% else %}
+    <p class="muted">No comments yet.</p>
+    {% endfor %}
+
+    {% if g.user and post.is_published %}
+    <form method="post" action="{{ url_for('main.add_comment', post_id=post.id) }}" class="field">
+      <label for="comment">Add a comment</label>
+      <textarea id="comment" name="body" rows="3" maxlength="2000" placeholder="Say something kind and useful…" required></textarea>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Post comment</button></div>
+    </form>
+    {% elif not g.user %}
+    <p class="muted small"><a class="author-name" href="{{ url_for('main.login') }}">Log in</a> to join the conversation.</p>
+    {% endif %}
+  </section>
+</article>
+{% endblock %}

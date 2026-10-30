@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ error.code }}{% endblock %}
+{% block content %}
+<section class="container error-page">
+  <div class="error-code">{{ error.code }}</div>
+  <h1>{{ error.name }}</h1>
+  <p class="muted">
+    {% if error.code == 404 %}That page doesn't exist, or you don't have access to it.
+    {% elif error.code == 403 %}You don't have permission to do that.
+    {% elif error.code == 429 %}Too many attempts. Please wait a minute and try again.
+    {% elif error.code == 413 %}That file is too large.
+    {% else %}The request couldn't be completed.{% endif %}
+  </p>
+  <a class="btn btn-primary" href="{{ url_for('main.feed') }}">Back to stories</a>
+</section>
+{% endblock %}
